@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daffa Satrya Bara Pratama - Hosting Jarkom</title>
+    
+    <!-- Pustaka CSS Tailwind untuk styling cepat -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Google: Permanent Marker (untuk gaya tulisan tangan/doodle) & Space Mono (untuk gaya teknis) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <!-- Pustaka Matter.js untuk efek gravitasi fisika -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    
+    <!-- Pustaka Lucide Icons untuk ikon-ikon vektor -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Variabel warna dasar */
+        :root {
+            --c-red: #FF4747;
+            --c-blue: #4788FF;
+            --c-yellow: #FFD93D;
+            --c-dark: #1a1a1a;
+            --c-paper: #f0f0f0;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background-color: var(--c-paper);
+            /* Pola titik-titik di background */
+            background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow-x: hidden;
+            /* Kursor kustom berbentuk bulat */
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>') 12 12, auto;
+        }
+
+        /* Mengatur font khusus untuk judul dan elemen doodle */
+        h1, h2, h3, .font-doodle {
+            font-family: 'Permanent Marker', cursive;
+        }
+
+        /* Gaya untuk kotak-kotak doodle (seperti kartu) */
+        .doodle-box {
+            background: white;
+            border: 3px solid var(--c-dark);
+            border-radius: 2px;
+            box-shadow: 6px 6px 0px var(--c-dark); /* Efek bayangan kasar */
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Efek saat mouse diarahkan ke kotak */
+        .doodle-box:hover {
+            transform: translate(-4px, -4px) scale(1.02);
+            box-shadow: 10px 10px 0px var(--c-dark);
+        }
+
+        /* Warna-warna tema untuk kotak */
+        .doodle-box.primary { background-color: var(--c-red); color: white; }
+        .doodle-box.secondary { background-color: var(--c-blue); color: white; }
+        .doodle-box.accent { background-color: var(--c-yellow); color: var(--c-dark); }
+
+        /* Gaya border bergelombang untuk foto */
+        .wiggle-border {
+            border: 4px solid var(--c-dark);
+            /* Membuat sudut border tidak beraturan */
+            border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+            box-shadow: 8px 8px 0px var(--c-blue);
+            transition: all 0.5s ease;
+        }
+        
+        .wiggle-border:hover {
+            /* Mengubah bentuk border saat di-hover */
+            border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
+            box-shadow: 12px 12px 0px var(--c-red);
+        }
+
+        /* Pengaturan wadah untuk kanvas fisika (objek jatuh) */
+        #physics-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0; /* Di belakang konten utama */
+            pointer-events: none; /* Agar klik tembus ke elemen di bawahnya kecuali kanvasnya sendiri */
+        }
+        
+        #physics-container canvas {
+            pointer-events: auto; /* Agar kita bisa melempar objek */
+        }
+
+        /* Efek selotip transparan */
+        .tape {
+            background-color: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            position: absolute;
+            height: 35px;
+            width: 110px;
+            border-left: 2px dotted rgba(0,0,0,0.1);
+            border-right: 2px dotted rgba(0,0,0,0.1);
+            backdrop-filter: blur(2px);
+            z-index: 20;
+        }
+
+        /* Animasi melayang naik turun */
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .float-anim { animation: float 4s ease-in-out infinite; }
+        
+        /* Animasi bergoyang kiri kanan */
+        @keyframes sway {
+            0%, 100% { transform: rotate(-2deg); }
+            50% { transform: rotate(2deg); }
+        }
+        .sway-anim { animation: sway 3s ease-in-out infinite; }
+        
+        /* Animasi berputar pelan */
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow { animation: spin-slow 10s linear infinite; }
+
+        /* Gaya untuk gambar doodle statis di latar belakang */
+        .static-doodle {
+            position: absolute;
+            z-index: -1;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* Gaya garis bawah coretan */
+        .scribble-underline {
+            position: relative;
+            display: inline-block;
+        }
+        .scribble-underline::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -5px;
+            width: 0%;
+            height: 6px;
+            /* Gambar SVG garis coretan */
+            background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 10 Q 25 20 50 10 T 100 10' stroke='%23FF4747' stroke-width='4' fill='none'/%3E%3C/svg%3E") no-repeat center;
+            background-size: 100% 100%;
+            transition: width 1s ease-in-out 0.5s;
+        }
+        
+        /* Animasi garis bawah muncul saat elemen terlihat */
+        .reveal.active .scribble-underline::after,
+        .reveal-right.active .scribble-underline::after {
+            width: 100%;
+        }
+
+        /* Gaya scrollbar kustom */
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: var(--c-paper); border-left: 3px solid var(--c-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--c-dark); border: 2px solid var(--c-paper); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--c-red); }
+
+        /* --- ANIMASI SCROLL (MUNCUL SAAT DIGULIR) --- */
+        .reveal, .reveal-left, .reveal-right, .reveal-pop, .reveal-rotate {
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+        /* Muncul dari bawah */
+        .reveal { transform: translateY(50px); transition: all 0.8s cubic-bezier(0.5, 0, 0, 1); }
+        .reveal.active { opacity: 1; transform: translateY(0); }
+        
+        /* Muncul dari kiri */
+        .reveal-left { transform: translateX(-50px) rotate(-5deg); transition: all 0.8s cubic-bezier(0.5, 0, 0, 1); }
+        .reveal-left.active { opacity: 1; transform: translateX(0) rotate(0deg); }
+        
+        /* Muncul dari kanan */
+        .reveal-right { transform: translateX(50px); transition: all 0.8s cubic-bezier(0.5, 0, 0, 1); }
+        .reveal-right.active { opacity: 1; transform: translateX(0); }
+        
+        /* Muncul membesar (pop) */
+        .reveal-pop { transform: scale(0.5); transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .reveal-pop.active { opacity: 1; transform: scale(1); }
+        
+        /* Muncul sambil berputar */
+        .reveal-rotate { transform: rotate(-10deg) scale(0.9); transition: all 0.8s ease-out; }
+        .reveal-rotate.active { opacity: 1; transform: rotate(1deg) scale(1); }
+
+        /* Penundaan animasi (delay) */
+        .delay-100 { transition-delay: 0.1s; }
+        .delay-200 { transition-delay: 0.2s; }
+        .delay-300 { transition-delay: 0.3s; }
+        .delay-400 { transition-delay: 0.4s; }
+        .delay-500 { transition-delay: 0.5s; }
+
+    </style>
+</head>
+<body class="min-h-screen relative overflow-x-hidden">
+
+    <!-- Latar Belakang Doodle Statis (Z-INDEX -1: Di belakang semuanya) -->
+    <div class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none" style="z-index: -1;">
+        <!-- Coretan Kiri Atas -->
+        <svg class="static-doodle top-10 left-10 w-24 h-24 text-blue-400 rotate-12 float-anim" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
+            <path d="M10 50 Q 25 25 50 50 T 90 50" />
+            <path d="M10 30 Q 25 5 50 30 T 90 30" />
+            <path d="M10 70 Q 25 45 50 70 T 90 70" />
+        </svg>
+
+        <!-- Bintang Kanan Atas -->
+        <svg class="static-doodle top-20 right-20 w-32 h-32 text-yellow-400 animate-pulse" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M50 5 L61 35 L95 35 L68 55 L79 85 L50 65 L21 85 L32 55 L5 35 L39 35 Z" stroke-linejoin="round" />
+        </svg>
+        
+        <!-- Spiral Kiri Tengah -->
+        <svg class="static-doodle top-1/3 -left-12 w-48 h-48 text-red-200 float-anim delay-200" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+             <path d="M50 50 m 0 0 a 5 5 0 1 1 10 0 a 10 10 0 1 1 -20 0 a 15 15 0 1 1 30 0 a 20 20 0 1 1 -40 0" />
+        </svg>
+
+        <!-- Panah Kanan Tengah -->
+        <svg class="static-doodle top-1/2 right-10 w-24 h-24 text-black opacity-20 rotate-45" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4">
+            <path d="M10 50 L90 50 M60 20 L90 50 L60 80" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+
+        <!-- Tanda Tambah Kiri Bawah -->
+        <div class="static-doodle bottom-40 left-20 text-3xl font-doodle text-gray-400 rotate-12 float-anim delay-500">
+            + + + <br> + + +
+        </div>
+    </div>
+
+    <!-- Kanvas Fisika untuk Objek Jatuh (Z-INDEX 0) -->
+    <div id="physics-container"></div>
+
+    <!-- Kontainer Utama Website (Z-INDEX 10: Di depan latar belakang) -->
+    <div class="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
+        
+        <!-- Navbar (Posisi Sticky: Menempel saat discroll) -->
+        <nav class="sticky top-4 z-50 reveal flex flex-col md:flex-row justify-between items-center mb-12 doodle-box accent p-4 rotate-1 hover:rotate-0 transition-transform">
+            <div class="text-xl font-bold font-doodle flex items-center gap-2 mb-4 md:mb-0">
+                <i data-lucide="network" class="animate-spin-slow"></i> DSBP.WEB
+            </div>
+            <div class="flex gap-4 text-sm font-bold flex-wrap justify-center">
+                <a href="#about" class="hover:underline decoration-wavy decoration-2 hover:text-red-500 transition-colors">PROFILE</a>
+                <a href="#materi" class="hover:underline decoration-wavy decoration-2 hover:text-blue-500 transition-colors">MATERI</a>
+                <!-- UBAH DISINI: Ganti "TUGAS" jadi "FILE" -->
+                <a href="#tugas" class="hover:underline decoration-wavy decoration-2 hover:text-green-600 transition-colors">FILE</a>
+            </div>
+        </nav>
+
+        <!-- Bagian Hero: Profil Diri -->
+        <section id="about" class="grid md:grid-cols-2 gap-12 items-center mb-20">
+            <!-- Kolom Kiri: Foto -->
+            <div class="relative group mx-auto md:mx-0 reveal-left">
+                <!-- DOODLE: Mahkota di atas foto -->
+                <div class="absolute -top-12 left-1/2 -translate-x-1/2 text-6xl rotate-[-12deg] z-20 animate-bounce cursor-pointer hover:rotate-12 transition-transform">👑</div>
+                
+                <!-- DOODLE: Kilauan di kiri -->
+                <div class="absolute top-1/2 -left-12 text-5xl text-yellow-400 animate-pulse z-20">✨</div>
+                
+                <!-- DOODLE: Bohlam di kanan bawah -->
+                <div class="absolute -bottom-4 -right-8 text-6xl float-anim z-20" style="animation-delay: 1s;">💡</div>
+                
+                <!-- DOODLE: Balon kata di kanan atas -->
+                <div class="absolute top-10 -right-20 hidden md:block z-20 float-anim delay-200">
+                    <svg width="100" height="80" viewBox="0 0 120 100" fill="white" stroke="black" stroke-width="3" class="rotate-12 drop-shadow-lg">
+                        <path d="M10,10 H110 V70 H40 L20,90 L30,70 H10 Z" />
+                    </svg>
+                    <span class="absolute top-4 left-6 font-doodle text-xl rotate-12">Hi!</span>
+                </div>
+
+                <!-- DOODLE: Lingkaran coretan di belakang foto -->
+                <svg class="absolute -top-10 -right-10 w-48 h-48 text-pink-200 -z-10 rotate-45 animate-spin-slow" style="animation-duration: 20s;" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+                     <path d="M50 50 m 0 0 a 5 5 0 1 1 10 0 a 10 10 0 1 1 -20 0 a 15 15 0 1 1 30 0 a 20 20 0 1 1 -40 0 a 25 25 0 1 1 50 0" />
+                </svg>
+                
+                <!-- Bingkai Foto Utama -->
+                <div class="relative transition-transform duration-500 hover:scale-105">
+                    <!-- Lapisan kuning di belakang foto -->
+                    <div class="absolute inset-0 bg-yellow-400 rounded-[255px_15px_225px_15px/15px_225px_15px_255px] rotate-3 transform translate-x-2 translate-y-2 border-4 border-black"></div>
+                    <!-- Foto -->
+                    <img 
+                        src="apii apii.jpeg" 
+                        alt="Daffa Satrya Bara Pratama" 
+                        class="wiggle-border relative z-10 bg-white w-72 h-72 object-cover rotate-[-2deg] hover:rotate-0 transition-transform duration-300 grayscale hover:grayscale-0"
+                    >
+                    <!-- Label Nama -->
+                    <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 z-20 bg-white border-2 border-black p-2 shadow-[4px_4px_0px_black] rotate-2 w-max hover:rotate-0 transition-transform">
+                        <p class="font-doodle text-xl text-red-500">607012500048</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan: Teks Deskripsi -->
+            <div class="space-y-6 relative reveal-right">
+                <!-- DOODLE: Panah melengkung menunjuk ke judul -->
+                <svg class="absolute -right-10 -top-10 w-24 h-24 text-black hidden md:block transform rotate-45" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M80 10 Q 50 50 10 50 L 20 40 M 10 50 L 20 60" />
+                </svg>
+
+                <div class="doodle-box p-6 bg-white rotate-1 hover:rotate-0">
+                    <div class="tape top-[-15px] left-[50%] -translate-x-1/2 rotate-[-2deg]"></div>
+                    <h1 class="text-4xl md:text-5xl font-bold mb-2 leading-none uppercase pt-4">
+                        Daffa Satrya<br>
+                        <span class="text-blue-600 scribble-underline">Bara Pratama</span>
+                    </h1>
+                    <p class="text-xl mt-4 font-bold bg-black text-white inline-block px-2 py-1 rotate-[-1deg] hover:rotate-1 transition-transform">
+                        Mata Kuliah: Jaringan Komputer
+                    </p>
+                    <p class="mt-4 text-gray-700 leading-relaxed">
+                        Dalam sebuah infrastruktur jaringan, setiap node (komputer) memerlukan Network Interface Card (NIC) sebagai antarmuka fisik untuk dapat mentransmisikan sinyal data. Di lingkup lokal (LAN), distribusi data dikelola oleh Switch, yang bekerja pada Data Link Layer untuk meneruskan paket data secara presisi ke alamat fisik (MAC Address) tujuan, sehingga mencegah tabrakan data (collision).
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bagian Materi Jaringan -->
+        <section id="materi" class="mb-20 relative">
+            <!-- Dekorasi Latar Belakang -->
+            <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 -z-10 animate-pulse"></div>
+            <svg class="absolute top-12 left-0 w-full h-full pointer-events-none -z-10 opacity-30 hidden md:block reveal" viewBox="0 0 800 400">
+                <path d="M100 100 Q 400 300 700 100" stroke="black" stroke-width="2" stroke-dasharray="10 10" fill="none"/>
+            </svg>
+            <div class="absolute -left-8 top-1/2 text-4xl animate-bounce hidden md:block">🔗</div>
+
+            <!-- Judul Bagian -->
+            <div class="text-center mb-10 reveal">
+                <h2 class="text-4xl font-doodle scribble-underline relative inline-block bg-white px-4 py-2 border-2 border-black rotate-[-2deg] shadow-[4px_4px_0px_black] hover:rotate-2 transition-transform float-anim">
+                    Perangkat Jaringan
+                </h2>
+            </div>
+
+            <!-- Grid Kartu Materi -->
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Kartu Router -->
+                <div class="doodle-box primary p-6 rotate-[-1deg] group hover:z-20 reveal-pop delay-100 float-anim">
+                    <div class="absolute -top-4 -right-4 text-3xl opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-125">📡</div>
+                    <div class="flex justify-between items-start mb-4">
+                        <i data-lucide="router" class="w-10 h-10 group-hover:rotate-12 transition-transform"></i>
+                        <span class="font-bold text-2xl opacity-50">01</span>
+                    </div>
+                    <h3 class="text-2xl mb-3">ROUTER</h3>
+                    <p class="text-sm leading-relaxed opacity-90">
+                        Polisi lalu lintas internet. Perangkat ini menghubungkan jaringan yang berbeda dan menentukan rute terbaik.
+                    </p>
+                </div>
+
+                <!-- Kartu Switch -->
+                <div class="doodle-box secondary p-6 rotate-2 group mt-4 md:mt-0 hover:z-20 reveal-pop delay-200 sway-anim">
+                    <div class="absolute -bottom-4 -left-4 text-3xl opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-125">🔌</div>
+                    <div class="flex justify-between items-start mb-4">
+                        <i data-lucide="arrow-left-right" class="w-10 h-10 group-hover:rotate-12 transition-transform"></i>
+                        <span class="font-bold text-2xl opacity-50">02</span>
+                    </div>
+                    <h3 class="text-2xl mb-3">SWITCH</h3>
+                    <p class="text-sm leading-relaxed opacity-90">
+                        Terminal penghubung dalam satu jaringan lokal (LAN). Dia pintar, bisa membedakan alamat MAC address.
+                    </p>
+                </div>
+
+                <!-- Kartu Access Point -->
+                <div class="doodle-box accent p-6 rotate-[-2deg] group mt-4 md:mt-0 hover:z-20 reveal-pop delay-300 float-anim" style="animation-delay: 1s;">
+                    <div class="absolute -top-6 left-1/2 text-3xl opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-125">📶</div>
+                    <div class="flex justify-between items-start mb-4">
+                        <i data-lucide="wifi" class="w-10 h-10 group-hover:rotate-12 transition-transform"></i>
+                        <span class="font-bold text-2xl opacity-50">03</span>
+                    </div>
+                    <h3 class="text-2xl mb-3">ACCESS POINT</h3>
+                    <p class="text-sm leading-relaxed opacity-90">
+                        Penyebar sinyal WiFi. Alat ini mengubah koneksi kabel (wired) menjadi nirkabel (wireless).
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bagian File/Download -->
+        <section id="tugas" class="mb-20 relative mt-16">
+             <!-- DOODLE: Klip kertas melayang -->
+             <div class="absolute -top-6 right-12 z-20 transform rotate-45 text-4xl float-anim">📎</div>
+             <!-- DOODLE: Pesawat kertas -->
+             <div class="absolute -top-12 left-20 z-10 transform -rotate-12 text-5xl float-anim delay-300">✈️</div>
+             
+             <!-- DOODLE: Disket -->
+             <div class="absolute -bottom-4 -right-4 z-20 text-5xl rotate-12 float-anim delay-200">💾</div>
+             
+             <!-- DOODLE: Folder -->
+             <div class="absolute top-1/2 -left-10 z-20 text-6xl -rotate-12 float-anim delay-500 hidden md:block">📂</div>
+
+             <!-- DOODLE: Awan -->
+             <svg class="absolute -bottom-8 -left-8 w-24 h-16 text-gray-300 opacity-50 z-0" viewBox="0 0 100 60" fill="currentColor">
+                 <path d="M10 40 Q 0 40 0 30 Q 0 10 20 10 Q 30 0 50 0 Q 70 0 80 10 Q 100 10 100 30 Q 100 40 90 40 L 10 40" />
+             </svg>
+             
+             <!-- DOODLE: Garis keriting latar belakang -->
+             <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20" preserveAspectRatio="none">
+                 <path d="M0 50 Q 50 10 100 50 T 200 50 T 300 50 T 400 50 T 500 50" fill="none" stroke="black" stroke-width="2" stroke-dasharray="5,5" />
+             </svg>
+
+             <!-- Kotak Download Utama -->
+             <div class="doodle-box p-8 bg-white border-4 border-dashed border-gray-400 rotate-1 reveal-rotate relative overflow-hidden group">
+                <!-- Pola titik-titik halus di dalam kotak -->
+                <div class="absolute inset-0 opacity-5 pointer-events-none" style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 10px 10px;"></div>
+                
+                <!-- Stiker "FILE BARU!" -->
+                <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-doodle px-4 py-1 rotate-[-5deg] shadow-md animate-bounce z-20 border-2 border-black">
+                    FILE BARU!
+                </div>
+
+                <!-- Hiasan selotip di pojok -->
+                <div class="tape top-[-15px] left-[-30px] rotate-[-45deg] bg-yellow-100/80"></div>
+                <div class="tape bottom-[-15px] right-[-30px] rotate-[-45deg] bg-yellow-100/80"></div>
+
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+                    <div>
+                        <h2 class="text-3xl font-doodle mb-2 flex items-center gap-2">
+                            📥 Area Download
+                            <svg class="w-6 h-6 text-yellow-400 fill-current animate-spin-slow" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        </h2>
+                        <p class="text-gray-600">File tutorial dan laporan praktikum Jaringan Komputer.</p>
+                        <!-- Doodle kecil sebaris -->
+                        <div class="flex gap-2 mt-2 opacity-50">
+                            <span>★</span><span>●</span><span>▲</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3 w-full md:w-auto relative">
+                        <!-- Petunjuk "Klik Di Sini" -->
+                        <div class="absolute -right-20 top-1/2 transform -translate-y-1/2 font-doodle text-sm rotate-12 text-blue-500 hidden xl:block animate-pulse">
+                            <- Klik Di Sini!
+                        </div>
+
+                        <!-- Tombol Download 1: Membuka PDF di Tab Baru -->
+                        <!-- Pastikan file 'Tugas Besar Hosting Jarkom.pdf' ada di folder yang sama -->
+                        <a href="Tugas Besar Hosting Jarkom.pdf" target="_blank" class="doodle-box bg-green-400 text-black px-6 py-3 font-bold flex items-center justify-center gap-2 hover:bg-green-300 transform hover:rotate-2 hover:scale-105 transition-all shadow-[4px_4px_0px_black] hover:shadow-[6px_6px_0px_black]">
+                            <i data-lucide="file-text"></i>Tutorial Hosting
+                        </a>
+                        
+                        <!-- Tombol Download 2: Otomatis Mengunduh PDF -->
+                        <a href="Tugas Besar Hosting Jarkom.pdf" download="Laporan_Praktikum_Daffa.pdf" class="doodle-box bg-pink-400 text-black px-6 py-3 font-bold flex items-center justify-center gap-2 hover:bg-pink-300 transform hover:-rotate-2 hover:scale-105 transition-all shadow-[4px_4px_0px_black] hover:shadow-[6px_6px_0px_black]">
+                            <i data-lucide="download-cloud"></i>Laporan Praktikum.pdf
+                        </a>
+                    </div>
+                </div>
+             </div>
+        </section>
+
+        <!-- Footer (Bagian Bawah) -->
+        <footer class="relative z-[60] text-center pt-24 pb-16 mt-20 bg-white overflow-hidden reveal">
+            <!-- Pola Latar Belakang Footer -->
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#6b7280 1px, transparent 1px); background-size: 15px 15px;"></div>
+
+            <!-- Gelombang Dekoratif di Bagian Atas Footer -->
+            <div class="absolute top-0 left-0 w-full overflow-hidden leading-0 transform -translate-y-[99%]">
+                <svg class="relative block w-[calc(100%+1.3px)] h-[80px]" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+                    <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" class="fill-[#f0f0f0]"></path>
+                </svg>
+            </div>
+            
+            <!-- Ikon Melayang Kiri & Kanan -->
+            <div class="absolute top-20 left-10 transform text-4xl animate-bounce" style="animation-duration: 3s;">☕</div>
+            <div class="absolute top-20 right-10 transform text-4xl animate-bounce" style="animation-duration: 4s;">💻</div>
+            
+            <!-- Banyak Doodle Dekoratif di Footer -->
+            <div class="absolute top-1/3 left-[15%] text-5xl opacity-20 rotate-12 float-anim delay-200">🪐</div>
+            <div class="absolute bottom-1/4 right-[15%] text-4xl opacity-20 -rotate-45 float-anim delay-400">🚀</div>
+            <div class="absolute bottom-0 left-10 text-6xl opacity-30 origin-bottom hover:scale-110 transition-transform">🌿</div>
+            <div class="absolute bottom-0 right-20 text-5xl opacity-30 origin-bottom hover:-translate-y-2 transition-transform">🐈</div>
+            <div class="absolute top-1/2 right-[30%] text-6xl opacity-20 float-anim delay-100">🛸</div>
+            <div class="absolute bottom-20 left-[30%] font-doodle text-xl opacity-30 rotate-[-10deg] animate-pulse">E=mc²</div>
+            <div class="absolute bottom-10 left-[45%] text-4xl opacity-40 rotate-[15deg] sway-anim">🙂</div>
+
+            <!-- Lingkaran Besar Kiri Bawah -->
+            <svg class="absolute -bottom-10 -left-10 w-40 h-40 text-blue-100 -z-10 rotate-12 opacity-50" viewBox="0 0 100 100" fill="currentColor">
+                <path d="M50 0C22.4 0 0 22.4 0 50s22.4 50 50 50 50-22.4 50-50S77.6 0 50 0zm0 90C27.9 90 10 72.1 10 50S27.9 10 50 10s40 17.9 40 40-17.9 40-40 40z"/>
+            </svg>
+
+            <!-- Coretan Kanan Atas Footer -->
+            <svg class="absolute top-20 right-20 w-32 h-32 text-yellow-100 -z-10" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3">
+                <path d="M10 50 Q 30 20 50 50 T 90 50 M10 60 Q 30 30 50 60 T 90 60" />
+            </svg>
+            
+            <!-- Bentuk Abstrak Pink -->
+            <svg class="absolute bottom-1/2 left-[10%] w-20 h-20 text-pink-200 -z-10 rotate-45" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+                 <rect x="10" y="10" width="80" height="80" rx="10" />
+            </svg>
+
+            <!-- Bagian Kredit & Copyright -->
+            <div class="relative z-10 flex flex-col gap-2 items-center justify-center">
+                <!-- Animasi Melayang untuk Teks Kredit -->
+                <div class="inline-block float-anim">
+                    <p class="font-doodle text-2xl mb-2 relative inline-block">
+                        🤯Dibuat oleh D.SatryaBara.P🤯
+                        <svg class="absolute -bottom-2 left-0 w-full h-3 text-red-400" viewBox="0 0 100 10" preserveAspectRatio="none">
+                            <path d="M0 5 Q 50 10 100 5" stroke="currentColor" stroke-width="3" fill="none" />
+                        </svg>
+                    </p>
+                </div>
+                
+                <!-- Teks Copyright dengan animasi denyut -->
+                <p class="text-xs font-mono text-gray-500 relative z-10 animate-pulse delay-200">
+                    © 2025 Jarkom Asik. All rights reserved.
+                </p>
+            </div>
+            
+            <!-- Garis Dekoratif di Paling Bawah Footer -->
+            <div class="w-32 h-2 bg-gray-200 mx-auto mt-4 rounded-full relative overflow-hidden">
+                <div class="absolute inset-0 bg-black w-1/2 animate-pulse" style="animation-duration: 1.5s;"></div>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- BAGIAN SKRIP JAVASCRIPT -->
+    <script>
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+        
+        // --- PEMANTAU SCROLL (INTERSECTION OBSERVER) ---
+        // Fungsi ini membuat elemen muncul (animasi masuk) saat digulir ke layar
+        document.addEventListener('DOMContentLoaded', () => {
+            const observerOptions = {
+                root: null, // viewport browser
+                rootMargin: '0px 0px -50px 0px', // memicu animasi sedikit sebelum elemen terlihat penuh
+                threshold: 0.1
+            };
+
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active'); // Tambahkan kelas 'active' untuk memulai animasi
+                    }
+                });
+            }, observerOptions);
+
+            // Pilih semua elemen yang punya kelas animasi
+            const animatedElements = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-pop, .reveal-rotate');
+            animatedElements.forEach(el => observer.observe(el));
+        });
+
+        // --- PENGATURAN MATTER.JS (EFEK GRAVITASI) ---
+        const initGravity = () => {
+            // Mengambil modul yang diperlukan dari Matter.js
+            const Engine = Matter.Engine,
+                  Render = Matter.Render,
+                  Runner = Matter.Runner,
+                  Bodies = Matter.Bodies,
+                  Composite = Matter.Composite,
+                  MouseConstraint = Matter.MouseConstraint,
+                  Mouse = Matter.Mouse,
+                  World = Matter.World;
+
+            // Membuat mesin fisika
+            const engine = Engine.create();
+            const world = engine.world;
+
+            // Membuat perender (penampil grafis)
+            const container = document.getElementById('physics-container');
+            const render = Render.create({
+                element: container,
+                engine: engine,
+                options: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    wireframes: false, // Tampilkan warna solid, bukan rangka kawat
+                    background: 'transparent',
+                    pixelRatio: window.devicePixelRatio
+                }
+            });
+
+            // MEMBUAT BATAS DINDING (Agar objek tidak jatuh keluar layar)
+            const wallThickness = 200; 
+            const ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + (wallThickness/2), window.innerWidth, wallThickness, { isStatic: true, render: { fillStyle: 'transparent' } });
+            const leftWall = Bodies.rectangle(-(wallThickness/2), window.innerHeight / 2, wallThickness, window.innerHeight * 2, { isStatic: true, render: { fillStyle: 'transparent' } });
+            const rightWall = Bodies.rectangle(window.innerWidth + (wallThickness/2), window.innerHeight / 2, wallThickness, window.innerHeight * 2, { isStatic: true, render: { fillStyle: 'transparent' } });
+
+            Composite.add(world, [ground, leftWall, rightWall]);
+
+            // Fungsi untuk membuat bentuk acak (Doodle)
+            const colors = ['#FF4747', '#4788FF', '#FFD93D', '#1a1a1a', '#ffffff', '#A3E635'];
+            
+            function createShape(x, y) {
+                const size = Math.random() * 40 + 20; // Ukuran acak
+                const color = colors[Math.floor(Math.random() * colors.length)]; // Warna acak
+                const type = Math.random();
+                let body;
+
+                const style = {
+                    fillStyle: color,
+                    strokeStyle: '#000',
+                    lineWidth: 3
+                };
+
+                if (type < 0.33) {
+                    // Membuat Lingkaran
+                    body = Bodies.circle(x, y, size / 2, {
+                        render: style,
+                        restitution: 0.9, // Daya pantul
+                        friction: 0.005
+                    });
+                } else if (type < 0.66) {
+                    // Membuat Kotak
+                    body = Bodies.rectangle(x, y, size, size, {
+                        render: style,
+                        restitution: 0.6,
+                        friction: 0.005
+                    });
+                } else {
+                    // Membuat Segitiga (Polygon)
+                    body = Bodies.polygon(x, y, 3, size / 1.5, {
+                        render: style,
+                        restitution: 0.5,
+                        friction: 0.005
+                    });
+                }
+                return body;
+            }
+
+            // Menambahkan bentuk awal saat halaman dimuat
+            const shapes = [];
+            const spawnCount = 50; // Jumlah objek awal
+            
+            for (let i = 0; i < spawnCount; i++) {
+                const spawnX = (Math.random() * (window.innerWidth * 0.4)) + (window.innerWidth * 0.3);
+                const spawnY = Math.random() * -1200 - 100; // Posisi jatuh dari atas layar
+                shapes.push(createShape(spawnX, spawnY));
+            }
+            Composite.add(world, shapes);
+
+            // Menambahkan Interaksi Mouse (Agar bisa melempar objek)
+            const mouse = Mouse.create(render.canvas);
+            const mouseConstraint = MouseConstraint.create(engine, {
+                mouse: mouse,
+                constraint: {
+                    stiffness: 0.2,
+                    render: {
+                        visible: false
+                    }
+                }
+            });
+
+            // Mencegah scrolling saat berinteraksi dengan kanvas
+            mouseConstraint.mouse.element.removeEventListener("mousewheel", mouseConstraint.mouse.mousewheel);
+            mouseConstraint.mouse.element.removeEventListener("DOMMouseScroll", mouseConstraint.mouse.mousewheel);
+
+            Composite.add(world, mouseConstraint);
+
+            // Menjalankan mesin fisika
+            Render.run(render);
+            const runner = Runner.create();
+            Runner.run(runner, engine);
+
+            // Menangani perubahan ukuran layar (Resize)
+            window.addEventListener('resize', () => {
+                render.canvas.width = window.innerWidth;
+                render.canvas.height = window.innerHeight;
+                
+                // Mengatur ulang posisi dinding batas
+                Matter.Body.setPosition(ground, { x: window.innerWidth / 2, y: window.innerHeight + (wallThickness/2) });
+                Matter.Body.setPosition(rightWall, { x: window.innerWidth + (wallThickness/2), y: window.innerHeight / 2 });
+                Matter.Body.setVertices(ground, Matter.Bodies.rectangle(window.innerWidth / 2, window.innerHeight + (wallThickness/2), window.innerWidth, wallThickness).vertices);
+            });
+            
+            // Event listener: Klik di area kosong untuk menambah objek baru
+            document.addEventListener('click', (e) => {
+                if(e.target.id === 'physics-container' || e.target.tagName === 'CANVAS') {
+                    const newShape = createShape(e.clientX, e.clientY);
+                    Composite.add(world, newShape);
+                }
+            });
+        };
+
+        // Jalankan fungsi gravitasi saat halaman selesai dimuat
+        window.onload = initGravity;
+
+    </script>
+</body>
+</html>
